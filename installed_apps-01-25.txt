@@ -1,0 +1,184 @@
+System Report as of January 2025
+==================================================
+
+Applications (.app)
+--------------------------------------------------
+1Password for Safari.app
+1Password.app
+4K Video Downloader.app
+4K YouTube to MP3.app
+AdBlock.app
+Alfred 5.app
+Amazon Kindle.app
+Anaconda-Navigator.app
+AnyList.app
+AppCleaner.app
+Bartender 5.app
+Battle.net.app
+Brave Browser.app
+BusyCal.app
+CARROT.app
+ChatGPT.app
+Claude.app
+CurseForge.app
+DB Browser for SQLite.app
+Discord.app
+Drafts.app
+Dropbox.app
+Dynamo.app
+Easydict.app
+Emacs.app
+Epic Games Launcher.app
+Firefox.app
+GIMP.app
+Google Chrome.app
+Google Docs.app
+Google Drive.app
+Google Sheets.app
+Google Slides.app
+HEIC Converter.app
+HiddenMe.app
+Keka.app
+Keyboard Maestro.app
+Keynote.app
+Kindle Previewer 3.app
+LuLu.app
+MacWhisper.app
+Malwarebytes.app
+Microsoft Excel.app
+Microsoft OneNote.app
+Microsoft Outlook.app
+Microsoft PowerPoint.app
+Microsoft Remote Desktop.app
+Microsoft Teams.app
+Microsoft Word.app
+NCalc.app
+Numbers.app
+Obsidian.app
+OneDrive.app
+PDF Expert.app
+Pages.app
+Pastebot.app
+PixelSnap 2.app
+Postman.app
+Power Node.app
+PyCharm CE.app
+Qmenu.app
+Rectangle.app
+Royal TSX.app
+Safari.app
+Speedtest.app
+Spotify.app
+Sublime Text.app
+Taculator Desktop.app
+Things3.app
+Tor Browser.app
+UpNote.app
+VLC.app
+VMware Fusion.app
+Visual Studio Code.app
+WKO5.app
+Warp.app
+WeChat.app
+Wine Crossover.app
+X.app
+Zwift.app
+calibre.app
+draw.io.app
+iMazing Converter.app
+iTerm.app
+pgAdmin 4.app
+zoom.us.app
+
+Homebrew Packages (non-cask)
+--------------------------------------------------
+abseil
+at-spi2-core
+bash
+brotli
+c-ares
+ca-certificates
+cairo
+certifi
+dbus
+emacs
+fontconfig
+freetype
+fribidi
+gdk-pixbuf
+gettext
+giflib
+git
+git-gui
+glib
+gmp
+gnutls
+graphite2
+grep
+gsettings-desktop-schemas
+gtk+3
+harfbuzz
+hicolor-icon-theme
+icu4c@76
+jansson
+jpeg-turbo
+jupyterlab
+krb5
+libepoxy
+libevent
+libffi
+libidn2
+libimagequant
+libnghttp2
+libpng
+libraqm
+libsodium
+libtasn1
+libtiff
+libunistring
+libuv
+libx11
+libxau
+libxcb
+libxdmcp
+libxext
+libxfixes
+libxi
+libxrender
+libxtst
+libyaml
+little-cms2
+lz4
+lzo
+mpdecimal
+mysql
+ncurses
+nettle
+node
+openjpeg
+openssl@3
+p11-kit
+pandoc
+pango
+pcre
+pcre2
+pillow
+pixman
+postgresql@14
+protobuf
+python-packaging
+python@3.13
+readline
+sqlite
+tcl-tk@8
+tree
+tree-sitter
+unbound
+weasyprint
+webp
+xorgproto
+xz
+zeromq
+zlib
+zsh
+zstd
