@@ -182,3 +182,6 @@ zeromq
 zlib
 zsh
 zstd
+
+NOTE: A Brewfile has been created that can be used to reinstall all Homebrew packages.
+To reinstall using the Brewfile, run: brew bundle install --file Brewfile-MM-YY

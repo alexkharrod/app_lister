@@ -4,15 +4,18 @@ import subprocess
 
 def get_brew_packages():
     try:
-        # Run 'brew list --formula' to get non-cask packages
+        # Get regular brew formulae
         result = subprocess.run(['brew', 'list', '--formula'], capture_output=True, text=True)
-        if result.returncode == 0:
-            # Split the output into a list and sort it
-            return sorted(result.stdout.strip().split('\n'))
-        return []
+        packages = sorted(result.stdout.strip().split('\n')) if result.returncode == 0 else []
+        
+        # Create Brewfile for reinstallation
+        brewfile_result = subprocess.run(['brew', 'bundle', 'dump'], capture_output=True, text=True)
+        brewfile_content = brewfile_result.stdout if brewfile_result.returncode == 0 else ""
+        
+        return packages, brewfile_content
     except FileNotFoundError:
         print("Homebrew not found. Skipping brew packages.")
-        return []
+        return [], ""
 
 def get_installed_apps():
     # Define the applications directory path
@@ -21,37 +24,38 @@ def get_installed_apps():
     # Get current date for filename
     current_date = datetime.now().strftime("%m-%y")
     output_file = f"installed_apps-{current_date}.txt"
+    brewfile = f"Brewfile-{current_date}"
     
-    # Get list of all .app files
-    apps = []
     try:
-        # Walk through the Applications directory
-        for item in os.listdir(apps_dir):
-            if item.endswith('.app'):
-                apps.append(item)
+        # Get .app files
+        apps = sorted([item for item in os.listdir(apps_dir) if item.endswith('.app')])
         
-        # Sort alphabetically
-        apps.sort()
+        # Get Homebrew packages and Brewfile content
+        brew_packages, brewfile_content = get_brew_packages()
         
-        # Get Homebrew packages
-        brew_packages = get_brew_packages()
-        
-        # Write to file
+        # Write main report
         with open(output_file, 'w', encoding='utf-8') as f:
             f.write(f"System Report as of {datetime.now().strftime('%B %Y')}\n")
             f.write("=" * 50 + "\n\n")
             
-            # Write Applications
             f.write("Applications (.app)\n")
             f.write("-" * 50 + "\n")
             for app in apps:
                 f.write(f"{app}\n")
             
-            # Write Homebrew packages
             f.write("\nHomebrew Packages (non-cask)\n")
             f.write("-" * 50 + "\n")
             for package in brew_packages:
                 f.write(f"{package}\n")
+            
+            f.write("\nNOTE: A Brewfile has been created that can be used to reinstall all Homebrew packages.\n")
+            f.write("To reinstall using the Brewfile, run: brew bundle install --file Brewfile-MM-YY\n")
+        
+        # Write Brewfile
+        if brewfile_content:
+            with open(brewfile, 'w', encoding='utf-8') as f:
+                f.write(brewfile_content)
+            print(f"Created {brewfile} for package reinstallation")
                 
         print(f"Successfully created {output_file}")
         print(f"Found {len(apps)} applications and {len(brew_packages)} Homebrew packages.")
