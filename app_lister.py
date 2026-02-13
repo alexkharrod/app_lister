@@ -1,21 +1,28 @@
 import os
 from datetime import datetime
 import subprocess
+from pathlib import Path
 
-def get_brew_packages():
+def get_brew_packages(brewfile_path: str):
     try:
         # Get regular brew formulae
         result = subprocess.run(['brew', 'list', '--formula'], capture_output=True, text=True)
-        packages = sorted(result.stdout.strip().split('\n')) if result.returncode == 0 else []
-        
-        # Create Brewfile for reinstallation
-        brewfile_result = subprocess.run(['brew', 'bundle', 'dump'], capture_output=True, text=True)
-        brewfile_content = brewfile_result.stdout if brewfile_result.returncode == 0 else ""
-        
-        return packages, brewfile_content
+        packages = sorted(result.stdout.strip().split('\n')) if result.returncode == 0 and result.stdout.strip() else []
+
+        # Create Brewfile for reinstallation (write directly to the requested path)
+        brewfile_created = False
+        dump_result = subprocess.run(
+            ['brew', 'bundle', 'dump', '--file', brewfile_path, '--force'],
+            capture_output=True,
+            text=True
+        )
+        if dump_result.returncode == 0:
+            brewfile_created = True
+
+        return packages, brewfile_created
     except FileNotFoundError:
         print("Homebrew not found. Skipping brew packages.")
-        return [], ""
+        return [], False
 
 def get_installed_apps():
     # Define the applications directory path
@@ -23,15 +30,20 @@ def get_installed_apps():
     
     # Get current date for filename
     current_date = datetime.now().strftime("%m-%y")
-    output_file = f"installed_apps-{current_date}.txt"
-    brewfile = f"Brewfile-{current_date}"
+
+    # Output folder in Dropbox
+    output_dir = Path(os.path.expanduser("~/Library/CloudStorage/Dropbox/Mac Installed Apps"))
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    output_file = output_dir / f"installed_apps-{current_date}.txt"
+    brewfile = output_dir / f"Brewfile-{current_date}"
     
     try:
         # Get .app files
         apps = sorted([item for item in os.listdir(apps_dir) if item.endswith('.app')])
         
         # Get Homebrew packages and Brewfile content
-        brew_packages, brewfile_content = get_brew_packages()
+        brew_packages, brewfile_created = get_brew_packages(str(brewfile))
         
         # Write main report
         with open(output_file, 'w', encoding='utf-8') as f:
@@ -48,14 +60,11 @@ def get_installed_apps():
             for package in brew_packages:
                 f.write(f"{package}\n")
             
-            f.write("\nNOTE: A Brewfile has been created that can be used to reinstall all Homebrew packages.\n")
-            f.write("To reinstall using the Brewfile, run: brew bundle install --file Brewfile-MM-YY\n")
-        
-        # Write Brewfile
-        if brewfile_content:
-            with open(brewfile, 'w', encoding='utf-8') as f:
-                f.write(brewfile_content)
-            print(f"Created {brewfile} for package reinstallation")
+            if brewfile_created:
+                f.write("\nNOTE: A Brewfile has been created in the same folder as this report and can be used to reinstall all Homebrew packages.\n")
+                f.write(f"To reinstall using the Brewfile, run: brew bundle install --file \"{brewfile.name}\"\n")
+            else:
+                f.write("\nNOTE: Brewfile was not created (Homebrew missing or brew bundle dump failed).\n")
                 
         print(f"Successfully created {output_file}")
         print(f"Found {len(apps)} applications and {len(brew_packages)} Homebrew packages.")
