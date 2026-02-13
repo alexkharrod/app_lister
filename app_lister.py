@@ -2,6 +2,7 @@ import os
 from datetime import datetime
 import subprocess
 from pathlib import Path
+import shutil
 
 def get_brew_packages(brewfile_path: str):
     try:
@@ -28,6 +29,34 @@ def get_brew_packages(brewfile_path: str):
         print("Homebrew not found. Skipping brew packages.")
         return [], [], False
 
+def get_mas_apps():
+    """Return a list of Mac App Store apps via `mas list`.
+
+    Note: When run via launchd, PATH can be minimal, so we try common Homebrew locations.
+    """
+    try:
+        # Try to find `mas` even when PATH is minimal (launchd)
+        mas_path = shutil.which(
+            'mas',
+            path=os.environ.get('PATH', '') + ':/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin'
+        )
+        if not mas_path:
+            return []
+
+        result = subprocess.run([mas_path, 'list'], capture_output=True, text=True)
+        if result.returncode != 0 or not result.stdout.strip():
+            return []
+
+        apps = []
+        for line in result.stdout.strip().split('\n'):
+            # Format: 497799835 Xcode (15.0)
+            parts = line.split(' ', 1)
+            if len(parts) == 2:
+                apps.append(parts[1].strip())
+        return sorted(apps)
+    except Exception:
+        return []
+
 def get_installed_apps():
     # Define the applications directory path
     apps_dir = "/Applications"
@@ -49,6 +78,9 @@ def get_installed_apps():
         # Get Homebrew packages and Brewfile content
         brew_packages, brew_casks, brewfile_created = get_brew_packages(str(brewfile))
         
+        # Get MAS apps
+        mas_apps = get_mas_apps()
+        
         # Write main report
         with open(output_file, 'w', encoding='utf-8') as f:
             f.write(f"System Report as of {datetime.now().strftime('%B %Y')}\n")
@@ -68,6 +100,15 @@ def get_installed_apps():
             f.write("-" * 50 + "\n")
             for cask in brew_casks:
                 f.write(f"{cask}\n")
+
+            f.write("\nMac App Store Apps (mas)\n")
+            f.write("-" * 50 + "\n")
+            if mas_apps:
+                for mas_app in mas_apps:
+                    f.write(f"{mas_app}\n")
+            else:
+                f.write("mas not installed, not in PATH for launchd, not signed into App Store, or no MAS apps detected\n")
+                f.write("Tip: run `brew install mas` and then `mas list` in Terminal to verify.\n")
             
             if brewfile_created:
                 f.write("\nNOTE: A Brewfile has been created in the same folder as this report and can be used to reinstall all Homebrew packages.\n")
