@@ -1,0 +1,112 @@
+System Report as of February 2026
+==================================================
+
+Applications (.app)
+--------------------------------------------------
+1Password for Safari.app
+1Password.app
+4K Video Downloader+.app
+4K Video to MP3.app
+4K YouTube to MP3.app
+AdBlock.app
+Alfred 5.app
+Amazon Kindle.app
+Antinote.app
+AnyList.app
+AppCleaner.app
+Bartender 6.app
+Battle.net.app
+ChatGPT.app
+Claude.app
+DB Browser for SQLite.app
+Discord.app
+Drafts.app
+Dropbox.app
+Easydict.app
+Firefox.app
+Google Chrome.app
+Keka.app
+Little Snitch Mini.app
+MacWhisper.app
+MacZip.app
+Malwarebytes.app
+Microsoft 365 Copilot Shim.app
+Microsoft Excel.app
+Microsoft Outlook.app
+Microsoft PowerPoint.app
+Microsoft Teams.app
+Microsoft Word.app
+NCalc.app
+Obsidian.app
+OneDrive.app
+Pastebot.app
+PixelSnap 2.app
+Postman.app
+Power Node.app
+Qmenu.app
+Rectangle.app
+Safari.app
+Speedtest.app
+Spotify.app
+Sublime Text.app
+Taculator Desktop.app
+Things3.app
+Tor Browser.app
+Visual Studio Code.app
+Warp.app
+WeChat.app
+Windows App.app
+Wine Crossover.app
+Xcode.app
+Zwift.app
+calibre.app
+draw.io.app
+iMazing Converter.app
+iTerm.app
+zoom.us.app
+
+Homebrew Packages (non-cask)
+--------------------------------------------------
+ca-certificates
+cairo
+fontconfig
+freetype
+fribidi
+gdk-pixbuf
+gettext
+git
+git-gui
+glib
+graphite2
+harfbuzz
+icu4c@78
+jpeg-turbo
+libdatrie
+libffi
+libiconv
+libpng
+libthai
+libtiff
+libtommath
+libunistring
+libx11
+libxau
+libxcb
+libxdmcp
+libxext
+libxrender
+lz4
+lzo
+ncurses
+openssl@3
+pango
+pcre2
+pixman
+tcl-tk
+xorgproto
+xz
+zsh
+zstd
+
+NOTE: A Brewfile has been created that can be used to reinstall all Homebrew packages.
+To reinstall using the Brewfile, run: brew bundle install --file Brewfile-MM-YY
