@@ -179,6 +179,128 @@ def export_env_snapshot(output_dir: Path, current_date: str) -> dict:
     if safe_copy_dir(launchagents, la_dir):
         results["copied"].append('launchd/LaunchAgents/')
 
+    # ---- iTerm2 preferences ----
+    iterm2_dir = snapshot_dir / 'iterm2'
+    # Export as readable XML plist (best for diff / inspection)
+    iterm2_plist = home / 'Library' / 'Preferences' / 'com.googlecode.iterm2.plist'
+    if run_cmd_to_file(
+        ['defaults', 'export', 'com.googlecode.iterm2', '-'],
+        iterm2_dir / 'com.googlecode.iterm2.plist'
+    ):
+        results["exported"].append('iterm2/com.googlecode.iterm2.plist (defaults export)')
+    elif safe_copy_file(iterm2_plist, iterm2_dir):
+        results["copied"].append('iterm2/com.googlecode.iterm2.plist (binary copy)')
+    else:
+        results["notes"].append('iTerm2 plist not found — iTerm2 may not be installed.')
+
+    # Also copy any dynamic profiles and color presets
+    iterm2_app_support = home / 'Library' / 'Application Support' / 'iTerm2'
+    for sub in ['DynamicProfiles', 'Scripts']:
+        subpath = iterm2_app_support / sub
+        if subpath.exists():
+            if safe_copy_dir(subpath, iterm2_dir):
+                results["copied"].append(f"iterm2/{sub}/")
+
+    # ---- Warp terminal config ----
+    warp_src = home / '.warp'
+    if safe_copy_dir(warp_src, snapshot_dir):
+        results["copied"].append('.warp/ (Warp config)')
+    else:
+        results["notes"].append('~/.warp not found — Warp may not be installed or not yet configured.')
+
+    # ---- Keyboard Maestro macros ----
+    km_src = home / 'Library' / 'Application Support' / 'Keyboard Maestro' / 'Keyboard Maestro Macros.kmmacros'
+    km_dir = snapshot_dir / 'keyboard_maestro'
+    if safe_copy_file(km_src, km_dir):
+        results["copied"].append('keyboard_maestro/Keyboard Maestro Macros.kmmacros')
+    else:
+        results["notes"].append('Keyboard Maestro Macros.kmmacros not found — KM may not be installed.')
+
+    # ---- Sublime Text user settings ----
+    sublime_src = home / 'Library' / 'Application Support' / 'Sublime Text' / 'Packages' / 'User'
+    sublime_dir = snapshot_dir / 'sublime_text'
+    if safe_copy_dir(sublime_src, sublime_dir):
+        results["copied"].append('sublime_text/User/ (Sublime Text settings)')
+    else:
+        results["notes"].append('Sublime Text User folder not found — may not be installed.')
+
+    # ---- Rectangle window manager preferences ----
+    defaults_dir_rect = snapshot_dir / 'rectangle'
+    if run_cmd_to_file(['defaults', 'export', 'com.knollsoft.Rectangle', '-'], defaults_dir_rect / 'com.knollsoft.Rectangle.plist'):
+        results["exported"].append('rectangle/com.knollsoft.Rectangle.plist')
+    else:
+        results["notes"].append('Rectangle preferences not found — may not be installed.')
+
+    # ---- npm global packages ----
+    npm_dir = snapshot_dir / 'npm'
+    npm_path = shutil.which('npm', path=os.environ.get('PATH', '') + ':/opt/homebrew/bin:/usr/local/bin')
+    if npm_path and run_cmd_to_file([npm_path, 'list', '-g', '--depth=0'], npm_dir / 'npm-globals.txt'):
+        results["exported"].append('npm/npm-globals.txt')
+    else:
+        results["notes"].append('npm not found or npm list -g failed.')
+
+    # ---- Conda environments ----
+    conda_dir = snapshot_dir / 'conda'
+    conda_path = shutil.which('conda', path=os.environ.get('PATH', '') + ':/opt/homebrew/bin:/opt/miniconda3/bin:/usr/local/bin')
+    if conda_path:
+        # List all envs
+        env_list_result = subprocess.run([conda_path, 'env', 'list', '--json'], capture_output=True, text=True)
+        if env_list_result.returncode == 0:
+            import json
+            try:
+                env_data = json.loads(env_list_result.stdout)
+                env_paths = env_data.get('envs', [])
+                conda_dir.mkdir(parents=True, exist_ok=True)
+                exported_envs = []
+                for env_path in env_paths:
+                    env_name = Path(env_path).name  # 'base', 'myenv', etc.
+                    out_file = conda_dir / f"{env_name}.yml"
+                    r = subprocess.run([conda_path, 'env', 'export', '-p', env_path], capture_output=True, text=True)
+                    if r.returncode == 0:
+                        out_file.write_text(r.stdout, encoding='utf-8')
+                        exported_envs.append(f"conda/{env_name}.yml")
+                results["exported"].extend(exported_envs)
+                if not exported_envs:
+                    results["notes"].append('Conda found but no environments exported.')
+            except Exception:
+                results["notes"].append('Conda env export failed (JSON parse error).')
+    else:
+        results["notes"].append('conda not found in PATH — miniconda may not be activated.')
+
+    # ---- Custom fonts (manually installed, not covered by Brewfile) ----
+    user_fonts_src = home / 'Library' / 'Fonts'
+    fonts_dir = snapshot_dir / 'fonts'
+    if user_fonts_src.exists() and any(user_fonts_src.iterdir()):
+        if safe_copy_dir(user_fonts_src, fonts_dir):
+            results["copied"].append('fonts/Fonts/ (~/Library/Fonts)')
+    else:
+        results["notes"].append('~/Library/Fonts is empty — all fonts likely covered by Brewfile casks.')
+
+    # ---- /etc/hosts (custom entries) ----
+    hosts_dir = snapshot_dir / 'network'
+    if safe_copy_file(Path('/etc/hosts'), hosts_dir):
+        results["copied"].append('network/hosts')
+
+    # ---- macOS computer name ----
+    system_dir = snapshot_dir / 'system'
+    system_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        computer_name = subprocess.run(['scutil', '--get', 'ComputerName'], capture_output=True, text=True).stdout.strip()
+        local_hostname = subprocess.run(['scutil', '--get', 'LocalHostName'], capture_output=True, text=True).stdout.strip()
+        hostname = subprocess.run(['scutil', '--get', 'HostName'], capture_output=True, text=True).stdout.strip()
+        with open(system_dir / 'computer_name.txt', 'w', encoding='utf-8') as f:
+            f.write(f"ComputerName:  {computer_name}\n")
+            f.write(f"LocalHostName: {local_hostname}\n")
+            f.write(f"HostName:      {hostname}\n")
+            f.write("\nTo restore on new Mac:\n")
+            f.write(f"  sudo scutil --set ComputerName '{computer_name}'\n")
+            f.write(f"  sudo scutil --set LocalHostName '{local_hostname}'\n")
+            if hostname:
+                f.write(f"  sudo scutil --set HostName '{hostname}'\n")
+        results["exported"].append('system/computer_name.txt')
+    except Exception:
+        results["notes"].append('Could not read computer name via scutil.')
+
     # ---- macOS preferences export (lightweight, most useful domains) ----
     defaults_dir = snapshot_dir / 'macos_defaults'
     for domain, outname in [
@@ -214,6 +336,16 @@ def export_env_snapshot(output_dir: Path, current_date: str) -> dict:
         m.write("- Git: .gitconfig, GitHub CLI config (if present)\n")
         m.write("- Shell: zsh/bash config files (if present)\n")
         m.write("- VS Code: settings/keybindings/snippets (if present)\n")
+        m.write("- iTerm2: preferences plist, dynamic profiles, scripts (if installed)\n")
+        m.write("- Warp: ~/.warp/ config directory (if installed)\n")
+        m.write("- Keyboard Maestro: Keyboard Maestro Macros.kmmacros (if installed)\n")
+        m.write("- Sublime Text: Packages/User/ settings folder (if installed)\n")
+        m.write("- Rectangle: preferences plist (if installed)\n")
+        m.write("- npm: global packages list (if installed)\n")
+        m.write("- Conda: exported .yml for each environment (if installed)\n")
+        m.write("- Fonts: ~/Library/Fonts (manually installed fonts not in Brewfile)\n")
+        m.write("- Network: /etc/hosts\n")
+        m.write("- System: computer name / hostname\n")
         m.write("- launchd: ~/Library/LaunchAgents\n")
         m.write("- macOS defaults: a few common domains\n")
         m.write("- Python: pip freeze for the interpreter running this script\n\n")
@@ -262,6 +394,39 @@ def generate_directory_map(home: Path, snapshot_dir: Path, max_depth: int = 3):
                     walk_dir(p, depth + 1)
 
         walk_dir(home, 0)
+
+def collect_python_project_repos(projects_dir: Path) -> list[dict]:
+    """Scan projects_dir for git repos and return list of {name, folder, remote, ssh_remote}."""
+    repos = []
+    if not projects_dir.exists():
+        return repos
+    for item in sorted(projects_dir.iterdir()):
+        if not item.is_dir():
+            continue
+        git_dir = item / '.git'
+        if not git_dir.exists():
+            continue
+        try:
+            result = subprocess.run(
+                ['git', '-C', str(item), 'remote', 'get-url', 'origin'],
+                capture_output=True, text=True
+            )
+            remote = result.stdout.strip() if result.returncode == 0 else ''
+            # Convert HTTPS to SSH format for cloning on new Mac
+            ssh_remote = remote
+            if remote.startswith('https://github.com/'):
+                path_part = remote.replace('https://github.com/', '')
+                ssh_remote = f"git@github.com:{path_part}"
+            repos.append({
+                'name': item.name,
+                'folder': item.name,
+                'remote': remote,
+                'ssh_remote': ssh_remote,
+            })
+        except Exception:
+            continue
+    return repos
+
 
 def get_installed_apps():
     # Define the applications directory path
@@ -325,19 +490,241 @@ def get_installed_apps():
         print(f"Successfully created {output_file}")
         print(f"Found {len(apps)} applications and {len(brew_packages)} Homebrew packages.")
 
+        # Collect Python project repos for README
+        python_projects_dir = Path(os.path.expanduser('~/PythonProjects'))
+        python_repos = collect_python_project_repos(python_projects_dir)
+
         # Create reinstall instructions markdown
         readme_file = output_dir / "README-Reinstall.md"
+        snapshot_subdir = f"snapshot-{current_date}"
         with open(readme_file, 'w', encoding='utf-8') as r:
-            r.write("# Mac Reinstall Instructions\n\n")
-            r.write("## 1. Install Homebrew\n")
-            r.write("https://brew.sh\n\n")
-            r.write("## 2. Restore Applications\n")
-            r.write(f"Run from this folder:\n\n``\ncd \"{output_dir}\"\nbrew bundle install --file \"{brewfile.name}\"\n``\n\n")
-            r.write("## 3. Mac App Store Apps\n")
-            r.write("Install mas if needed: brew install mas\n")
-            r.write("Sign into the App Store, then run:\n\n``\nmas install $(mas list | awk '{print $1}')\n``\n\n")
-            r.write("## 4. Notes\n")
-            r.write("This file was auto-generated by app_lister.\n")
+            r.write(f"# Mac Reinstall Instructions\n\n")
+            r.write(f"_Auto-generated {datetime.now().strftime('%B %Y')} by app_lister. Work through steps in order._\n\n")
+            r.write("---\n\n")
+
+            r.write("## 1. First Things First\n\n")
+            r.write("- Connect to Wi-Fi — the rest of this process is download-heavy\n")
+            r.write("- Sign into iCloud (System Settings → Apple ID)\n")
+            r.write("- Sign into the Mac App Store (needed for MAS installs in step 6)\n\n")
+            r.write("### Install Dropbox and wait for sync — do this before anything else\n\n")
+            r.write("All your snapshot files, Brewfile, and this README live in Dropbox.\n")
+            r.write("You need Dropbox synced before step 3 will work.\n\n")
+            r.write("1. Download Dropbox from https://www.dropbox.com/install (do NOT use brew yet — the Brewfile is in Dropbox)\n")
+            r.write("2. Install and sign in\n")
+            r.write(f'3. Wait for the `Mac Installed Apps` folder to finish syncing — check that this file exists:\n')
+            r.write(f'   `{output_dir}/README-Reinstall.md`\n')
+            r.write("4. Once that folder is synced, proceed to step 2\n\n")
+            r.write("> **Shortcut:** If Dropbox is slow, you can also clone `github.com/alexkharrod/app_lister` and use the static `Brewfile` in that repo for step 3, then come back for the snapshot files once Dropbox catches up.\n\n")
+
+            r.write("## 2. Install Homebrew\n\n")
+            r.write("```bash\n")
+            r.write('/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"\n')
+            r.write("```\n\n")
+            r.write("After install, follow the instructions to add brew to your PATH (shown at end of install output).\n\n")
+
+            r.write("## 3. Restore Homebrew Packages & Apps\n\n")
+            r.write("This installs all formulae, casks, and VS Code extensions from the Brewfile snapshot.\n\n")
+            r.write("```bash\n")
+            r.write(f'brew bundle install --file "{output_dir}/{brewfile.name}"\n')
+            r.write("```\n\n")
+            r.write("> Note: Some casks may ask for your password or require manual approval in System Settings → Privacy & Security.\n\n")
+
+            r.write("## 4. Restore Custom Fonts\n\n")
+            r.write("Fonts installed via Homebrew casks are already handled by step 3.\n")
+            r.write("This step covers any fonts you manually installed into ~/Library/Fonts.\n\n")
+            r.write("```bash\n")
+            r.write(f'cp -r "{output_dir}/{snapshot_subdir}/fonts/Fonts/"* ~/Library/Fonts/\n')
+            r.write("```\n\n")
+            r.write("> Skip this step if the `fonts/Fonts/` folder in the snapshot is empty.\n\n")
+
+            r.write("## 5. Restore Shell Configuration\n\n")
+            r.write("```bash\n")
+            r.write(f'cp "{output_dir}/{snapshot_subdir}/shell/.zshrc" ~/.zshrc\n')
+            r.write(f'cp "{output_dir}/{snapshot_subdir}/shell/.zprofile" ~/.zprofile   # if it exists\n')
+            r.write(f'cp "{output_dir}/{snapshot_subdir}/shell/.p10k.zsh" ~/.p10k.zsh   # if using Powerlevel10k\n')
+            r.write("source ~/.zshrc\n")
+            r.write("```\n\n")
+
+            r.write("## 6. Mac App Store Apps\n\n")
+            r.write("```bash\n")
+            r.write("# Install mas if not already in Brewfile\n")
+            r.write("brew install mas\n\n")
+            r.write(f"# Re-install MAS apps (see {output_dir}/installed_apps-{current_date}.txt for the list)\n")
+            r.write("# Find each app's ID at https://apps.apple.com and run:\n")
+            r.write("# mas install <APP_ID>\n")
+            r.write("```\n\n")
+
+            r.write("## 7. Restore iTerm2 Settings\n\n")
+            r.write("```bash\n")
+            r.write(f'# Import preferences (restores colors, profiles, keybindings)\n')
+            r.write(f'cp "{output_dir}/{snapshot_subdir}/iterm2/com.googlecode.iterm2.plist" \\\n')
+            r.write('   ~/Library/Preferences/com.googlecode.iterm2.plist\n\n')
+            r.write("# Restore Dynamic Profiles if present\n")
+            r.write(f'cp -r "{output_dir}/{snapshot_subdir}/iterm2/DynamicProfiles" \\\n')
+            r.write('   ~/Library/Application\\ Support/iTerm2/DynamicProfiles\n')
+            r.write("```\n\n")
+            r.write("Then open iTerm2 → Preferences → General → Preferences and point it at this plist for future auto-sync.\n\n")
+
+            r.write("## 8. Restore Warp Terminal Config\n\n")
+            r.write("```bash\n")
+            r.write(f'cp -r "{output_dir}/{snapshot_subdir}/.warp" ~/.warp\n')
+            r.write("```\n\n")
+
+            r.write("## 9. Restore Keyboard Maestro Macros\n\n")
+            r.write("1. Open Keyboard Maestro\n")
+            r.write("2. File → Import Macros → select the file below:\n")
+            r.write(f'   `{output_dir}/{snapshot_subdir}/keyboard_maestro/Keyboard Maestro Macros.kmmacros`\n\n')
+            r.write("   Or from the terminal:\n")
+            r.write("```bash\n")
+            r.write(f'cp "{output_dir}/{snapshot_subdir}/keyboard_maestro/Keyboard Maestro Macros.kmmacros" \\\n')
+            r.write('   ~/Library/Application\\ Support/Keyboard\\ Maestro/\n')
+            r.write("# Then relaunch Keyboard Maestro for it to pick up the macros\n")
+            r.write("```\n\n")
+
+            r.write("## 10. Restore Sublime Text Settings\n\n")
+            r.write("```bash\n")
+            r.write('SUBLIME_USER="$HOME/Library/Application Support/Sublime Text/Packages/User"\n')
+            r.write('mkdir -p "$SUBLIME_USER"\n')
+            r.write(f'cp -r "{output_dir}/{snapshot_subdir}/sublime_text/User/"* "$SUBLIME_USER/"\n')
+            r.write("```\n\n")
+            r.write("Open Sublime Text → Tools → Install Package Control (if not already there), then install any packages listed in `Package Control.sublime-settings`.\n\n")
+
+            r.write("## 11. Restore Rectangle Preferences\n\n")
+            r.write("```bash\n")
+            r.write(f'cp "{output_dir}/{snapshot_subdir}/rectangle/com.knollsoft.Rectangle.plist" \\\n')
+            r.write('   ~/Library/Preferences/com.knollsoft.Rectangle.plist\n')
+            r.write("# Then relaunch Rectangle\n")
+            r.write("```\n\n")
+
+            r.write("## 12. Restore npm Global Packages\n\n")
+            r.write(f"Reference: `{output_dir}/{snapshot_subdir}/npm/npm-globals.txt`\n\n")
+            r.write("```bash\n")
+            r.write(f'cat "{output_dir}/{snapshot_subdir}/npm/npm-globals.txt"\n')
+            r.write("# Then reinstall each package, e.g.:\n")
+            r.write("# npm install -g <package-name>\n")
+            r.write("```\n\n")
+
+            r.write("## 13. Restore Conda Environments\n\n")
+            r.write(f"Exported .yml files are in: `{output_dir}/{snapshot_subdir}/conda/`\n\n")
+            r.write("```bash\n")
+            r.write(f'for yml in "{output_dir}/{snapshot_subdir}/conda/"*.yml; do\n')
+            r.write('    conda env create -f "$yml"\n')
+            r.write('done\n')
+            r.write("```\n\n")
+            r.write("> Note: `base.yml` contains the base conda environment — you can skip recreating it as a named env; it just serves as a reference.\n\n")
+
+            r.write("## 14. Restore /etc/hosts\n\n")
+            r.write("```bash\n")
+            r.write(f'# Review your old hosts file first:\n')
+            r.write(f'cat "{output_dir}/{snapshot_subdir}/network/hosts"\n\n')
+            r.write("# Merge any custom entries into the new Mac's hosts file:\n")
+            r.write("sudo nano /etc/hosts\n")
+            r.write("```\n\n")
+            r.write("> Don't blindly overwrite — the new Mac's hosts file already has required system entries.\n\n")
+
+            r.write("## 15. Restore Git & SSH Config\n\n")
+            r.write("### Git config\n\n")
+            r.write("```bash\n")
+            r.write(f'cp "{output_dir}/{snapshot_subdir}/git/.gitconfig" ~/.gitconfig\n')
+            r.write("```\n\n")
+            r.write("### SSH public key + config\n\n")
+            r.write("```bash\n")
+            r.write("mkdir -p ~/.ssh\n")
+            r.write(f'cp "{output_dir}/{snapshot_subdir}/ssh/config" ~/.ssh/config\n')
+            r.write(f'cp "{output_dir}/{snapshot_subdir}/ssh/known_hosts" ~/.ssh/known_hosts\n')
+            r.write("chmod 700 ~/.ssh\n")
+            r.write("chmod 600 ~/.ssh/config\n")
+            r.write("```\n\n")
+            r.write("### SSH private key — choose one option\n\n")
+            r.write("**Option 1 (recommended) — Generate a fresh key on the new Mac:**\n\n")
+            r.write("```bash\n")
+            r.write('ssh-keygen -t ed25519 -C "alexkharrod@gmail.com"\n')
+            r.write("gh auth login   # uploads the new key to GitHub automatically\n")
+            r.write("```\n\n")
+            r.write("Then add the new key to any other services you use SSH with (servers, hosting, etc.).\n\n")
+            r.write("**Option 2 — AirDrop the private key from old Mac:**\n\n")
+            r.write("On the old Mac: open Finder → Go → ~/.ssh → AirDrop `id_ed25519` to new Mac.\n\n")
+            r.write("```bash\n")
+            r.write("# On new Mac, after receiving via AirDrop:\n")
+            r.write("mv ~/Downloads/id_ed25519 ~/.ssh/id_ed25519\n")
+            r.write("chmod 600 ~/.ssh/id_ed25519\n")
+            r.write("ssh-add ~/.ssh/id_ed25519\n")
+            r.write("```\n\n")
+            r.write("**Option 3 — Retrieve from 1Password:**\n\n")
+            r.write("If you stored the private key as a secure note in 1Password, copy it out and save to `~/.ssh/id_ed25519`, then run `chmod 600 ~/.ssh/id_ed25519`.\n\n")
+            r.write("> **Private keys are NOT in the snapshot** — they are intentionally excluded for security.\n\n")
+
+            r.write("## 16. Restore VS Code Settings\n\n")
+            r.write("```bash\n")
+            r.write('VSCODE_USER="$HOME/Library/Application Support/Code/User"\n')
+            r.write(f'cp "{output_dir}/{snapshot_subdir}/vscode/settings.json" "$VSCODE_USER/settings.json"\n')
+            r.write(f'cp "{output_dir}/{snapshot_subdir}/vscode/keybindings.json" "$VSCODE_USER/keybindings.json"\n')
+            r.write(f'cp -r "{output_dir}/{snapshot_subdir}/vscode/snippets" "$VSCODE_USER/snippets"\n')
+            r.write("```\n\n")
+            r.write("VS Code extensions are already handled by `brew bundle` (step 3).\n\n")
+
+            r.write("## 17. Restore LaunchAgents (Automations)\n\n")
+            r.write("```bash\n")
+            r.write(f'cp "{output_dir}/{snapshot_subdir}/launchd/LaunchAgents/"*.plist ~/Library/LaunchAgents/\n\n')
+            r.write("# Load each one (replace <label> with the plist filename without .plist)\n")
+            r.write("launchctl load ~/Library/LaunchAgents/<label>.plist\n")
+            r.write("```\n\n")
+            r.write("Key LaunchAgents to check:\n")
+            r.write("- `com.logoinluded.ptool-backup.plist` — nightly DB backup to Dropbox\n\n")
+
+            r.write("## 18. Clone Python Projects\n\n")
+            r.write("```bash\n")
+            r.write("mkdir -p ~/PythonProjects && cd ~/PythonProjects\n\n")
+            if python_repos:
+                for repo in python_repos:
+                    folder = repo['folder']
+                    ssh = repo['ssh_remote']
+                    # Quote folder name in case it has spaces
+                    r.write(f'git clone "{ssh}" "{folder}"\n')
+            else:
+                r.write("# No git repos found in ~/PythonProjects at snapshot time\n")
+            r.write("```\n\n")
+            r.write("> Make sure SSH is set up first (step 14) and your key is added to GitHub before cloning via SSH.\n\n")
+
+            r.write("## 19. ptool (Internal Product Tool) Setup\n\n")
+            r.write("```bash\n")
+            r.write("cd ~/PythonProjects\n")
+            r.write("git clone git@github.com:<your-repo>/ptool.git\n")
+            r.write("cd ptool\n")
+            r.write("python -m venv .venv && source .venv/bin/activate\n")
+            r.write("pip install -r requirements.txt\n\n")
+            r.write("# Create .env with credentials from 1Password:\n")
+            r.write("cat > .env <<'EOF'\n")
+            r.write("SECRET_KEY=...\n")
+            r.write("DEBUG=False\n")
+            r.write("DATABASE_URL=postgresql://...\n")
+            r.write("CLOUDINARY_URL=cloudinary://...\n")
+            r.write("ALLOWED_HOSTS=...\n")
+            r.write("EOF\n\n")
+            r.write("python manage.py migrate\n")
+            r.write("python manage.py runserver\n")
+            r.write("```\n\n")
+
+            r.write("## 20. Set Computer Name\n\n")
+            r.write(f"Your previous computer name is saved in: `{output_dir}/{snapshot_subdir}/system/computer_name.txt`\n\n")
+            r.write("```bash\n")
+            r.write(f'cat "{output_dir}/{snapshot_subdir}/system/computer_name.txt"\n\n')
+            r.write("# Apply the names (replace values with what's in the file above):\n")
+            r.write("sudo scutil --set ComputerName 'Your Mac Name'\n")
+            r.write("sudo scutil --set LocalHostName 'Your-Mac-Name'\n")
+            r.write("```\n\n")
+
+            r.write("## 21. Restore macOS System Preferences\n\n")
+            r.write("The `macos_defaults/` folder in the snapshot contains exported preferences for Dock, Finder, Trackpad, etc.\n")
+            r.write("These are for reference — review and apply selectively:\n\n")
+            r.write("```bash\n")
+            r.write(f'cat "{output_dir}/{snapshot_subdir}/macos_defaults/dock.txt"\n')
+            r.write("# Then apply individual settings as needed, e.g.:\n")
+            r.write("# defaults write com.apple.dock autohide -bool true && killall Dock\n")
+            r.write("```\n\n")
+
+            r.write("---\n\n")
+            r.write("_This file is auto-generated by `app_lister.py`. Re-run it on your current machine to refresh the snapshot._\n")
 
         print(f"Created reinstall instructions: {readme_file}")
         
